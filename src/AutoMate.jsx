@@ -89,9 +89,14 @@ function useLS(k,init){const[v,set]=useState(()=>{try{const s=localStorage.getIt
 function useLSet(k){const[v,set]=useState(()=>{try{const s=localStorage.getItem("am_"+k);return s?new Set(JSON.parse(s)):new Set();}catch{return new Set();}});useEffect(()=>{try{localStorage.setItem("am_"+k,JSON.stringify([...v]));}catch{}},[k,v]);return[v,set];}
 
 // ── AI ───────────────────────────────────────────────────────────────────────
+function getKey(){
+  // Check for server-side env var first (set in Vercel), then localStorage
+  return process.env.REACT_APP_AI_KEY || (()=>{try{return localStorage.getItem("am_ak")?JSON.parse(localStorage.getItem("am_ak")):"";}catch{return"";}})();
+}
 async function callAI(key,sys,prompt){
-  if(!key)return null;
-  try{const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":key,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,system:sys,messages:[{role:"user",content:prompt}]})});const d=await r.json();return d.content?.map(c=>c.text||"").join("")||null;}catch(e){console.error("AI:",e);return null;}
+  const k=key||getKey();
+  if(!k)return null;
+  try{const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":k,"anthropic-version":"2023-06-01"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:800,system:sys,messages:[{role:"user",content:prompt}]})});const d=await r.json();return d.content?.map(c=>c.text||"").join("")||null;}catch(e){console.error("AI:",e);return null;}
 }
 
 // ── THEME ────────────────────────────────────────────────────────────────────
@@ -117,13 +122,15 @@ const C={
 export default function AutoMate(){
   const[page,setPage]=useLS("pg","landing");
   const[view,setView]=useState("discover");
-  const[apiKey,setApiKey]=useLS("ak","");
+  const apiKey=process.env.REACT_APP_AI_KEY||"";
   const[auth,setAuth]=useState({name:"",email:"",pw:""});
   const[qStep,setQStep]=useState(0);
-  const[quiz,setQuiz]=useLS("qz",{intent:"",values:[],lifestyle:"",commStyle:"",interests:[],intimacy:5});
+  const[quiz,setQuiz]=useState(()=>{try{const s=localStorage.getItem("am_qz");return s?JSON.parse(s):{intent:"",values:[],lifestyle:"",commStyle:"",interests:[],intimacy:5};}catch{return{intent:"",values:[],lifestyle:"",commStyle:"",interests:[],intimacy:5};}});
   const[vStep,setVStep]=useState(0);
   const[plan,setPlan]=useLS("pl",null);
-  const[me,setMe]=useLS("me",{name:"",age:"",gender:"",city:"",bio:"",interests:[],goals:"",values:[],lifestyle:"",commStyle:"",intimacy:5});
+  const[me,setMe]=useState(()=>{try{const s=localStorage.getItem("am_me");return s?JSON.parse(s):{name:"",age:"",gender:"",city:"",bio:"",interests:[],goals:"",values:[],lifestyle:"",commStyle:"",intimacy:5};}catch{return{name:"",age:"",gender:"",city:"",bio:"",interests:[],goals:"",values:[],lifestyle:"",commStyle:"",intimacy:5};}});
+  const saveMe=(data)=>{const updated={...me,...data};setMe(updated);try{localStorage.setItem("am_me",JSON.stringify(updated));}catch{}};
+  const saveQuiz=(data)=>{const updated={...quiz,...data};setQuiz(updated);try{localStorage.setItem("am_qz",JSON.stringify(updated));}catch{}};
   const[liked,setLiked]=useLSet("lk");
   const[passed,setPassed]=useLSet("ps");
   const[saved,setSaved]=useLSet("sv");
@@ -154,7 +161,7 @@ export default function AutoMate(){
   const[bioOut,setBioOut]=useState("");
   const[toast,setToast]=useState(null);
   const[booms,setBooms]=useState([]);
-  const[showKey,setShowKey]=useState(false);
+  
   const[matchAnim,setMatchAnim]=useState(null); // "It's a Match!" overlay
   const endRef=useRef(null);
   const inpRef=useRef(null);
@@ -196,7 +203,7 @@ export default function AutoMate(){
   const openChat=p=>{setMatch(p);setView("chat");};
   const doLike=(p,e)=>{setLiked(s=>new Set([...s,p.id]));boom(e);setMatchAnim(p);setTimeout(()=>setMatchAnim(null),3000);};
   const msgs=match?(convos[match.id]||[]):[];
-  const logout=()=>{localStorage.clear();setPage("landing");setMe({name:"",age:"",gender:"",city:"",bio:"",interests:[],goals:"",values:[],lifestyle:"",commStyle:"",intimacy:5});setConvos({});setToast("Logged out");};
+  const logout=()=>{localStorage.clear();window.location.reload();};
 
   // ── Shared styles ──────────────────────────────────────────────────────────
   const glass={background:C.glass,backdropFilter:"blur(28px)",WebkitBackdropFilter:"blur(28px)",border:`1px solid ${C.brd}`,borderRadius:22};
@@ -249,7 +256,7 @@ export default function AutoMate(){
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
         *{box-sizing:border-box;margin:0;padding:0}
         *::-webkit-scrollbar{width:4px}*::-webkit-scrollbar-thumb{background:rgba(120,75,160,0.2);border-radius:10px}
-        html,body,#root{height:100%;overflow:hidden}
+        html,body,#root{height:100%}
         .bp{transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1);cursor:pointer}
         .bp:hover{transform:scale(1.06);filter:brightness(1.1)}
         .bp:active{transform:scale(0.93)}
@@ -257,7 +264,7 @@ export default function AutoMate(){
         .ig:focus{box-shadow:0 0 0 3px rgba(255,60,172,0.2),0 0 28px rgba(120,75,160,0.15);border-color:rgba(255,60,172,0.4)!important}
         .gt{background:${C.g1};background-size:200% 200%;animation:grad 4s ease infinite;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
         .hov{transition:transform 0.4s,box-shadow 0.4s}.hov:hover{transform:perspective(800px) rotateY(2deg) rotateX(-2deg) translateY(-5px);box-shadow:0 22px 65px rgba(120,75,160,0.25)}
-        .w{width:100%;max-width:800px;flex:1;display:flex;flex-direction:column;position:relative;z-index:1;overflow:hidden;height:100vh}
+        .w{width:100%;max-width:800px;flex:1;display:flex;flex-direction:column;position:relative;z-index:1;min-height:100vh;overflow-y:auto}
         @media(min-width:768px){.w{border-left:1px solid rgba(118,92,220,0.06);border-right:1px solid rgba(118,92,220,0.06)}}
         .glow-btn{position:relative;overflow:hidden}
         .glow-btn::after{content:'';position:absolute;inset:-2px;border-radius:inherit;background:${C.g1};opacity:0;transition:opacity 0.3s;z-index:-1;filter:blur(12px)}
@@ -401,7 +408,7 @@ export default function AutoMate(){
             <Btn onClick={()=>{
               if(!quizValid()){setToast("Please make a selection");return;}
               if(qStep<QUIZ.length-1)setQStep(s=>s+1);
-              else{setMe(p=>({...p,interests:quiz.interests,values:quiz.values,goals:quiz.intent,commStyle:quiz.commStyle,lifestyle:quiz.lifestyle,intimacy:quiz.intimacy}));setPage("verify");setToast("Quiz complete! AI scoring your matches 🧠");}
+              else{saveMe({interests:quiz.interests,values:quiz.values,goals:quiz.intent,commStyle:quiz.commStyle,lifestyle:quiz.lifestyle,intimacy:quiz.intimacy});setPage("verify");setToast("Quiz complete! AI scoring your matches 🧠");}
             }} s={{flex:2}} disabled={!quizValid()}>{qStep===QUIZ.length-1?"Finish Quiz →":"Continue"}</Btn>
           </div>
         </div>
@@ -420,35 +427,13 @@ export default function AutoMate(){
             {vStep===3&&<div style={{textAlign:"center",animation:"pop 0.7s cubic-bezier(0.34,1.56,0.64,1)"}}><div style={{width:110,height:110,borderRadius:"50%",margin:"0 auto 24px",background:"rgba(0,232,123,0.08)",border:"3px solid rgba(0,232,123,0.3)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:52,animation:"glow 2s ease infinite"}}>✅</div><h2 style={{fontSize:28,fontWeight:800,fontFamily:"'Sora'",marginBottom:10}}><span className="gt">Identity Verified!</span></h2><p style={{fontSize:15,color:C.dim}}>Safe Date mode unlocked · 3x more matches</p></div>}
           </div>
           {(vStep===0||vStep===3)&&<div style={{display:"flex",gap:14,paddingBottom:22}}>
-            {vStep===0&&<Btn onClick={()=>setPage("apisetup")} g={C.card} s={{flex:1,boxShadow:"none",border:`1px solid ${C.brd}`}}>Skip</Btn>}
-            <Btn onClick={()=>{if(vStep===3)setPage("apisetup");else setVStep(1);}} s={{flex:2}}>{vStep===3?"Continue →":"Upload ID"}</Btn>
+            {vStep===0&&<Btn onClick={()=>setPage("plan")} g={C.card} s={{flex:1,boxShadow:"none",border:`1px solid ${C.brd}`}}>Skip</Btn>}
+            <Btn onClick={()=>{if(vStep===3)setPage("plan");else setVStep(1);}} s={{flex:2}}>{vStep===3?"Continue →":"Upload ID"}</Btn>
           </div>}
         </div>
       )}
 
-      {/* ══════════════════ API KEY ══════════════════ */}
-      {page==="apisetup"&&(
-        <div className="w" style={{justifyContent:"center",padding:36}}>
-          <div style={{textAlign:"center",marginBottom:36}}>
-            <div style={{fontSize:56,marginBottom:12,animation:"aiGlow 3s ease infinite, float 3s ease infinite"}}>🤖</div>
-            <h2 style={{fontSize:28,fontWeight:800,fontFamily:"'Sora'",marginBottom:8}}>Power Up with AI</h2>
-            <p style={{fontSize:15,color:C.dim,lineHeight:1.7,maxWidth:480,margin:"0 auto"}}>Connect your Anthropic API key to unlock AI chat replies, conversation coaching, bio writing, and smart date suggestions.</p>
-          </div>
-          <Card s={{padding:28,maxWidth:520,margin:"0 auto 24px",width:"100%"}}>
-            <Inp label="Anthropic API Key" type={showKey?"text":"password"} placeholder="sk-ant-api03-..." value={apiKey} onChange={e=>setApiKey(e.target.value)}/>
-            <button className="bp" onClick={()=>setShowKey(!showKey)} style={{background:"none",border:"none",color:C.dim,fontSize:14,marginTop:-10,marginBottom:14,...bpS}}>{showKey?"🙈 Hide":"👁️ Show"} key</button>
-            <Card s={{padding:14,display:"flex",alignItems:"center",gap:10,borderRadius:16}}>
-              <span style={{fontSize:18}}>🔐</span>
-              <p style={{fontSize:13,color:C.dim}}>Stored locally only. Never leaves your device except to call Anthropic's API.</p>
-            </Card>
-          </Card>
-          <p style={{textAlign:"center",fontSize:14,color:C.dim,marginBottom:8}}>Get your key at <span style={{color:C.pop,fontWeight:600}}>console.anthropic.com</span></p>
-          <div style={{display:"flex",gap:14,maxWidth:520,margin:"18px auto 0",width:"100%"}}>
-            <Btn onClick={()=>{setPage("plan");setToast("Continuing without AI — mock responses active");}} g={C.card} s={{flex:1,boxShadow:"none",border:`1px solid ${C.brd}`}}>Skip</Btn>
-            <Btn onClick={()=>{setPage("plan");setToast(apiKey?"AI Connected! 🤖✨":"No key — using mock responses");}} s={{flex:2}}>{apiKey?"Connect AI →":"Continue →"}</Btn>
-          </div>
-        </div>
-      )}
+      {/* API setup removed from user flow — key set via Vercel env var */}
 
       {/* ══════════════════ PLAN ══════════════════ */}
       {page==="plan"&&(
@@ -523,7 +508,7 @@ export default function AutoMate(){
           <Card s={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",margin:"10px 12px 0",borderRadius:22}}>
             <button className="bp" onClick={()=>{setView("discover");setMatch(null);}} style={{width:38,height:38,borderRadius:14,background:C.card2,border:"none",display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,color:C.text,...bpS}}>←</button>
             <div style={{position:"relative",cursor:"pointer"}} onClick={()=>setModal(match)}><img src={match.photo} alt="" style={{width:44,height:44,borderRadius:16,objectFit:"cover"}}/>{match.status==="online"&&<div style={{position:"absolute",bottom:0,right:0,width:11,height:11,borderRadius:"50%",background:C.green,boxShadow:`0 0 0 2px ${C.bg}`}}/>}</div>
-            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontWeight:700,fontSize:16}}>{match.name}</span>{match.verified&&<span style={{fontSize:12,color:C.green}}>✓</span>}</div><span style={{fontSize:12,color:C.dim}}>{match.compat}% compatible{apiKey?" · AI active":""}</span></div>
+            <div style={{flex:1}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontWeight:700,fontSize:16}}>{match.name}</span>{match.verified&&<span style={{fontSize:12,color:C.green}}>✓</span>}</div><span style={{fontSize:12,color:C.dim}}>{match.compat}% compatible</span></div>
             <button className="bp" onClick={()=>setShowCoach(!showCoach)} style={{width:36,height:36,borderRadius:13,background:showCoach?"rgba(255,60,172,0.12)":C.card2,border:"none",fontSize:15,...bpS}}>🤖</button>
             <button className="bp" onClick={()=>setShowDate(!showDate)} style={{width:36,height:36,borderRadius:13,background:C.card2,border:"none",fontSize:15,...bpS}}>📅</button>
             <button className="bp" onClick={()=>setReport(match)} style={{width:36,height:36,borderRadius:13,background:C.card2,border:"none",fontSize:15,...bpS}}>⚠️</button>
@@ -533,7 +518,7 @@ export default function AutoMate(){
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><span style={{fontSize:14,fontWeight:700}}>🤖 AI Coach</span><Btn onClick={fetchCoach} s={{padding:"6px 16px",fontSize:12,borderRadius:14}}>{coachLoad?"Thinking...":"✨ Suggest"}</Btn></div>
             {coachLoad&&<div style={{display:"flex",gap:5,justifyContent:"center",padding:8}}>{[0,1,2].map(i=><div key={i} style={{width:7,height:7,borderRadius:"50%",background:C.pop,animation:`dots 1.2s ease ${i*0.15}s infinite`}}/>)}</div>}
             {coachSugs?.map((s,i)=><button key={i} className="bp" onClick={()=>{setMsg(s);setShowCoach(false);inpRef.current?.focus();}} style={{display:"block",width:"100%",padding:"10px 14px",marginBottom:5,borderRadius:16,background:C.card2,border:`1px solid ${C.brd}`,color:C.soft,fontSize:14,textAlign:"left",animation:`slideR 0.3s ease ${i*0.07}s both`,...bpS}}>{s}</button>)}
-            {!coachSugs&&!coachLoad&&<p style={{fontSize:13,color:C.dim,textAlign:"center"}}>{apiKey?"Get AI-powered suggestions":"Add API key in Settings for AI"}</p>}
+            {!coachSugs&&!coachLoad&&<p style={{fontSize:13,color:C.dim,textAlign:"center"}}>Tap Suggest for AI-powered conversation starters</p>}
           </Card>}
 
           {showDate&&<Card s={{margin:"8px 12px 0",padding:14,borderRadius:20,animation:"slideUp 0.3s ease"}}>
@@ -542,7 +527,7 @@ export default function AutoMate(){
           </Card>}
 
           <div style={{flex:1,overflowY:"auto",padding:"12px 14px"}}>
-            {msgs.length===0&&<div style={{textAlign:"center",padding:"40px 0",animation:"fadeIn 0.5s ease"}}><div style={{fontSize:48,marginBottom:12,animation:"float 3s ease infinite"}}>👋</div><p style={{fontSize:18,fontWeight:600,marginBottom:8}}>Say hello to {match.name}!</p><p style={{fontSize:14,color:C.dim,marginBottom:18}}>{apiKey?"AI will power your conversation":"Send a message to get started"}</p><Btn onClick={()=>setShowCoach(true)} s={{fontSize:15,padding:"12px 26px"}}>🤖 AI Icebreakers</Btn></div>}
+            {msgs.length===0&&<div style={{textAlign:"center",padding:"40px 0",animation:"fadeIn 0.5s ease"}}><div style={{fontSize:48,marginBottom:12,animation:"float 3s ease infinite"}}>👋</div><p style={{fontSize:18,fontWeight:600,marginBottom:8}}>Say hello to {match.name}!</p><p style={{fontSize:14,color:C.dim,marginBottom:18}}>Break the ice with AI-powered suggestions</p><Btn onClick={()=>setShowCoach(true)} s={{fontSize:15,padding:"12px 26px"}}>🤖 AI Icebreakers</Btn></div>}
             {msgs.map((m,i)=>(
               <div key={m.id} style={{display:"flex",justifyContent:m.from==="me"?"flex-end":"flex-start",marginBottom:8,animation:`fadeUp 0.25s ease ${Math.min(i*0.03,0.15)}s both`}}>
                 <div onDoubleClick={()=>setShowRx(showRx===m.id?null:m.id)} style={{maxWidth:"75%",padding:"12px 16px",position:"relative",borderRadius:m.from==="me"?"20px 20px 4px 20px":"20px 20px 20px 4px",background:m.from==="me"?C.mine:C.them,color:m.from==="me"?"white":C.text,fontSize:15,lineHeight:1.5,cursor:"pointer",boxShadow:m.from==="me"?"0 5px 18px rgba(124,58,237,0.28)":"none"}}>
@@ -607,7 +592,7 @@ export default function AutoMate(){
             <div style={{marginBottom:18}}><label style={{fontSize:13,fontWeight:700,color:C.soft,marginBottom:8,display:"block"}}>Interests</label><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{(me.interests||[]).map(i=><span key={i} style={{padding:"7px 16px",borderRadius:14,fontSize:14,fontWeight:600,background:C.card2,border:`1px solid ${C.brd}`,color:C.soft}}>{i}</span>)}{me.interests?.length===0&&<p style={{fontSize:13,color:C.dim}}>Take the quiz to add interests</p>}</div></div>
             <div style={{marginBottom:18}}><label style={{fontSize:13,fontWeight:700,color:C.soft,marginBottom:8,display:"block"}}>Values</label><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{(me.values||[]).map(v=><span key={v} style={{padding:"7px 16px",borderRadius:14,fontSize:14,fontWeight:600,background:C.card2,border:`1px solid ${C.brd}`,color:C.soft}}>{v}</span>)}</div></div>
             <div style={{marginBottom:18}}><label style={{fontSize:13,fontWeight:700,color:C.soft,marginBottom:8,display:"block"}}>Intimacy Importance: <span className="gt">{me.intimacy}/10</span></label><input type="range" min={1} max={10} value={me.intimacy} onChange={e=>setMe(p=>({...p,intimacy:+e.target.value}))} style={{width:"100%",accentColor:C.pop,height:6}}/></div>
-            <Btn onClick={()=>{setView("discover");setToast("Profile saved! ✅");}} s={{width:"100%",marginTop:12,marginBottom:110}}>Save Profile</Btn>
+            <Btn onClick={()=>{saveMe(me);setView("discover");setToast("Profile saved! ✅");}} s={{width:"100%",marginTop:12,marginBottom:110}}>Save Profile</Btn>
           </div>
           <Nav/>
         </div>
@@ -619,7 +604,7 @@ export default function AutoMate(){
           <div style={{padding:24}}>
             <h2 style={{fontSize:26,fontWeight:800,fontFamily:"'Sora'",marginBottom:24}}>Settings</h2>
             {[
-              {icon:"🤖",title:"AI API Key",desc:apiKey?"Connected ✓":"Not set — tap to add",action:()=>setPage("apisetup"),highlight:!apiKey},
+              {icon:"🤖",title:"AI Status",desc:apiKey?"AI Connected ✓":"AI Offline",action:()=>setToast(apiKey?"AI is active and powering your experience!":"Contact admin to enable AI features")},
               {icon:"👤",title:"Edit Profile",action:()=>setView("profile")},
               {icon:"🔒",title:"Privacy & Safety",action:()=>setSafety(true)},
               {icon:"🔔",title:"Notifications",action:()=>setToast("Coming soon")},
@@ -730,7 +715,7 @@ export default function AutoMate(){
             <p style={{fontSize:14,fontWeight:700,color:C.soft,marginBottom:10}}>Choose your tone:</p>
             <div style={{display:"flex",gap:8,marginBottom:22,flexWrap:"wrap"}}>{["confident","friendly","witty","authentic","adventurous"].map(s=><button key={s} className="bp" onClick={()=>setBioTone(s)} style={{padding:"10px 20px",borderRadius:24,border:bioTone===s?"none":`1px solid ${C.brd}`,background:bioTone===s?C.gAI:C.card,color:bioTone===s?"white":C.soft,fontSize:14,fontWeight:600,textTransform:"capitalize",boxShadow:bioTone===s?"0 4px 18px rgba(168,85,247,0.3)":"none",...bpS}}>{s}</button>)}</div>
             <Btn onClick={genBio} disabled={bioLoad} g={C.gAI} s={{width:"100%",fontSize:15,marginBottom:16}}>{bioLoad?"✨ Writing your bio...":"✨ Generate Bio"}</Btn>
-            {bioOut&&<div style={{animation:"fadeUp 0.4s ease"}}><Card s={{padding:16,marginBottom:14}}><p style={{fontSize:15,color:C.soft,lineHeight:1.7}}>{bioOut}</p></Card><Btn onClick={()=>{setMe(p=>({...p,bio:bioOut}));setBioWriter(false);setBioOut("");setToast("Bio updated! ✨");}} s={{width:"100%",fontSize:15}}>Use This Bio</Btn></div>}
+            {bioOut&&<div style={{animation:"fadeUp 0.4s ease"}}><Card s={{padding:16,marginBottom:14}}><p style={{fontSize:15,color:C.soft,lineHeight:1.7}}>{bioOut}</p></Card><Btn onClick={()=>{saveMe({bio:bioOut});setBioWriter(false);setBioOut("");setToast("Bio updated! ✨");}} s={{width:"100%",fontSize:15}}>Use This Bio</Btn></div>}
           </Card>
         </div>
       )}
