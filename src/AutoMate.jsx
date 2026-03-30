@@ -58,6 +58,7 @@ const QUIZ_STEPS = [
 
 const ICEBREAKERS=["What's your most spontaneous adventure? 🌍","If you could teleport anywhere right now? ✈️","Guilty pleasure song? 🎵","Beach vacation or mountain cabin? 🏖️⛰️","Best meal you've ever had? 🤤","Morning person or night owl? 🌅🦉","What are you binge-watching? 📺","Lottery win — first purchase? 💰"];
 const EMOJIS=["❤️","🔥","😍","😂","👏","💕","✨","🥰"];
+const PROFILE_PROMPTS = ["The way to my heart is...", "I'm looking for someone who...", "A life goal of mine is...", "My simple pleasures are...", "I geek out on...", "My most controversial opinion is...", "The key to my heart is...", "I want someone who...", "My love language in action looks like...", "Two truths and a lie...", "I'll fall for you if...", "My ideal Sunday is...", "I'm convinced that...", "The best travel story I have is...", "I'll know it's time for a second date if...", "Change my mind about...", "Don't hate me if I...", "My most irrational fear is...", "I recently discovered that...", "Typical Sunday for me looks like..."];
 const DATE_IDEAS=[{e:"☕",t:"Coffee Date",d:"Cozy & casual"},{e:"🎨",t:"Art Gallery",d:"Creative vibes"},{e:"🥾",t:"Hiking Trail",d:"Adventure awaits"},{e:"🍷",t:"Wine Tasting",d:"Sophisticated sips"},{e:"🎳",t:"Bowling Night",d:"Retro fun"},{e:"🌮",t:"Food Crawl",d:"Taste everything"}];
 
 // ── COMPATIBILITY ────────────────────────────────────────────────────────────
@@ -202,7 +203,7 @@ export default function AutoMate() {
   const [authError, setAuthError] = useState("");
 
   // ── Profile & Quiz state ───────────────────────────────────────────────────
-  const [me, setMe] = useState({ name: "", age: "", gender: "", city: "", bio: "", interests: [], goals: "", values: [], lifestyle: "", comm_style: "", intimacy: 5, photo_url: "", job: "", identity: "", seeking: [], relationship_mode: "", education: "", profession: "", smoking: "", drinking: "", cannabis: "", has_kids: "", wants_kids: "", height: "", religion: "", politics: "", pets: "", exercise: "", diet: "", star_sign: "", languages: [], zip_code: "", latitude: null, longitude: null, discovery_prefs: { age_min: 18, age_max: 99, distance_max: 15, ai_override: true } });
+  const [me, setMe] = useState({ name: "", age: "", gender: "", city: "", bio: "", interests: [], goals: "", values: [], lifestyle: "", comm_style: "", intimacy: 5, photo_url: "", photos: [], job: "", identity: "", seeking: [], relationship_mode: "", education: "", profession: "", smoking: "", drinking: "", cannabis: "", has_kids: "", wants_kids: "", height: "", religion: "", politics: "", pets: "", exercise: "", diet: "", star_sign: "", languages: [], zip_code: "", latitude: null, longitude: null, discovery_prefs: { age_min: 18, age_max: 99, distance_max: 15, ai_override: true }, prompts: [{q:"",a:""},{q:"",a:""},{q:"",a:""}], private_fields: [] });
   const [quiz, setQuiz] = useState({ identity: "", seeking: [], intent: "", education: "", profession: "", smoking: "", drinking: "", cannabis: "", has_kids: "", wants_kids: "", values: [], lifestyle: "", exercise: "", diet: "", pets: "", religion: "", politics: "", star_sign: "", comm_style: "", interests: [], intimacy: 5 });
   const [qStep, setQStep] = useState(0);
   const [vStep, setVStep] = useState(0);
@@ -262,6 +263,8 @@ export default function AutoMate() {
   const [vibeAnswers, setVibeAnswers] = useState([]);
   const [vibeResult, setVibeResult] = useState(null);
   const [vibeLoad, setVibeLoad] = useState(false);
+  const [photoView, setPhotoView] = useState(null);
+  const [editPrompts, setEditPrompts] = useState(false);
   const endRef = useRef(null);
   const inpRef = useRef(null);
 
@@ -300,6 +303,7 @@ export default function AutoMate() {
         star_sign: data.star_sign || "", languages: data.languages || [],
         zip_code: data.zip_code || "", latitude: data.latitude || null, longitude: data.longitude || null,
         discovery_prefs: data.discovery_prefs || { age_min: 18, age_max: 99, distance_max: 15, ai_override: true },
+        photos: data.photos || [], prompts: data.prompts || [{q:"",a:""},{q:"",a:""},{q:"",a:""}], private_fields: data.private_fields || [],
       });
       if (data.name) setPage("app");
     }
@@ -340,6 +344,7 @@ export default function AutoMate() {
         star_sign: newMe.star_sign, languages: newMe.languages,
         zip_code: newMe.zip_code, latitude: newMe.latitude, longitude: newMe.longitude,
         discovery_prefs: newMe.discovery_prefs,
+        photos: newMe.photos, prompts: newMe.prompts, private_fields: newMe.private_fields,
         updated_at: new Date().toISOString(),
       }).eq("id", user.id);
     }
@@ -396,7 +401,7 @@ export default function AutoMate() {
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null); setSession(null); setPage("landing");
-    setMe({ name: "", age: "", gender: "", city: "", bio: "", interests: [], goals: "", values: [], lifestyle: "", comm_style: "", intimacy: 5, photo_url: "", job: "", identity: "", seeking: [], relationship_mode: "", education: "", profession: "", smoking: "", drinking: "", cannabis: "", has_kids: "", wants_kids: "", height: "", religion: "", politics: "", pets: "", exercise: "", diet: "", star_sign: "", languages: [], zip_code: "", latitude: null, longitude: null, discovery_prefs: { age_min: 18, age_max: 99, distance_max: 15, ai_override: true } });
+    setMe({ name: "", age: "", gender: "", city: "", bio: "", interests: [], goals: "", values: [], lifestyle: "", comm_style: "", intimacy: 5, photo_url: "", photos: [], job: "", identity: "", seeking: [], relationship_mode: "", education: "", profession: "", smoking: "", drinking: "", cannabis: "", has_kids: "", wants_kids: "", height: "", religion: "", politics: "", pets: "", exercise: "", diet: "", star_sign: "", languages: [], zip_code: "", latitude: null, longitude: null, discovery_prefs: { age_min: 18, age_max: 99, distance_max: 15, ai_override: true }, prompts: [{q:"",a:""},{q:"",a:""},{q:"",a:""}], private_fields: [] });
     setToast("Logged out");
   };
 
@@ -465,6 +470,28 @@ export default function AutoMate() {
     saveProfile({ photo_url: publicUrl });
     setToast("Photo uploaded! 📸");
   };
+
+  // ── Gallery photo upload (up to 20) ────────────────────────────────────────
+  const uploadGalleryPhoto = async (file) => {
+    if (!user || !file) return;
+    if ((me.photos || []).length >= 20) { setToast("Maximum 20 photos"); return; }
+    const ext = file.name.split(".").pop();
+    const ts = Date.now();
+    const path = `${user.id}/gallery_${ts}.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true });
+    if (error) { setToast("Upload failed: " + error.message); return; }
+    const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+    const updated = [...(me.photos || []), publicUrl];
+    saveProfile({ photos: updated });
+    if (!me.photo_url) saveProfile({ photo_url: publicUrl, photos: updated });
+    setToast(`Photo ${updated.length}/20 uploaded! 📸`);
+  };
+  const removeGalleryPhoto = (url) => {
+    const updated = (me.photos || []).filter(p => p !== url);
+    saveProfile({ photos: updated, photo_url: me.photo_url === url ? (updated[0] || "") : me.photo_url });
+    setToast("Photo removed");
+  };
+  const setMainPhoto = (url) => { saveProfile({ photo_url: url }); setToast("Main photo updated! ⭐"); };
 
   // ── Real-time messages (load + subscribe) ──────────────────────────────────
   const loadMessages = async (matchUserId, matchRecordId) => {
@@ -542,7 +569,7 @@ export default function AutoMate() {
   const STAR_ELEMENTS = { "Aries ♈": "Fire", "Leo ♌": "Fire", "Sagittarius ♐": "Fire", "Taurus ♉": "Earth", "Virgo ♍": "Earth", "Capricorn ♑": "Earth", "Gemini ♊": "Air", "Libra ♎": "Air", "Aquarius ♒": "Air", "Cancer ♋": "Water", "Scorpio ♏": "Water", "Pisces ♓": "Water" };
   const aiStars = async (prof) => {
     setStarsLoad(true); setStarsTarget(prof);
-    const r = await callAI('You are a cosmic relationship astrologer AI. Return ONLY valid JSON with: "cosmic_score" (0-100 integer), "element_match" (string like "Fire meets Water"), "soul_reading" (2-3 sentence poetic reading), "strengths" (array of 3 strings), "challenges" (array of 2 strings), "cosmic_advice" (one sentence), "best_date_night" (one sentence themed to their signs).', `Analyze the cosmic/astrological compatibility:\n\nPerson 1: ${me.name || "User"}, ${me.star_sign || "unknown sign"}, ${me.identity || me.gender || ""}. Values: ${me.values?.join(", ") || "not set"}. Love language: ${me.comm_style || "not set"}. Interests: ${me.interests?.join(", ") || "not set"}. Lifestyle: ${me.lifestyle || "not set"}.\n\nPerson 2: ${prof.name}, ${prof.star_sign || "unknown sign"}, ${prof.identity || prof.gender || ""}. Values: ${prof.values?.join(", ") || "not set"}. Love language: ${prof.comm_style || "not set"}. Interests: ${prof.interests?.join(", ") || "not set"}.\n\nBe mystical but grounded. Reference their actual traits. ONLY return JSON.`);
+    const r = await callAI('You are a cosmic relationship astrologer AI who deeply understands zodiac compatibility. Return ONLY valid JSON with: "cosmic_score" (0-100 integer), "element_match" (string describing their elements meeting, e.g. "Fire meets Water — steam and passion"), "soul_reading" (2-3 sentence poetic reading referencing their ACTUAL zodiac traits), "strengths" (array of 3 strings based on their sign pairing), "challenges" (array of 2 strings based on their sign pairing), "cosmic_advice" (one sentence advice that references BOTH signs by name, e.g. "When Gemini curiosity meets Pisces intuition..."), "best_date_night" (one sentence themed to BOTH their signs).', `Analyze cosmic compatibility using REAL astrology for these two signs:\n\nPerson 1: ${me.name || "User"}, ${me.star_sign || "unknown sign"} (element: ${STAR_ELEMENTS[me.star_sign] || "unknown"}). Values: ${me.values?.join(", ") || "not set"}. Love language: ${me.comm_style || "not set"}. Interests: ${me.interests?.join(", ") || "not set"}. Lifestyle: ${me.lifestyle || "not set"}.\n\nPerson 2: ${prof.name}, ${prof.star_sign || "unknown sign"} (element: ${STAR_ELEMENTS[prof.star_sign] || "unknown"}). Values: ${prof.values?.join(", ") || "not set"}. Love language: ${prof.comm_style || "not set"}. Interests: ${prof.interests?.join(", ") || "not set"}.\n\nUse REAL zodiac compatibility knowledge for ${me.star_sign || "their sign"} × ${prof.star_sign || "their sign"}. Reference their actual sign traits in every field. The cosmic_advice MUST mention both signs by name. ONLY return JSON.`);
     try { setStarsResult(JSON.parse((r || "{}").replace(/```json|```/g, "").trim())); } catch { setStarsResult({ cosmic_score: 78, element_match: `${STAR_ELEMENTS[me.star_sign] || "Spirit"} meets ${STAR_ELEMENTS[prof.star_sign] || "Spirit"}`, soul_reading: "The universe sees a rare alignment between your energies. Your souls vibrate on complementary frequencies, creating a harmony that few connections achieve.", strengths: ["Deep emotional resonance", "Complementary communication rhythms", "Shared growth trajectory"], challenges: ["Different pacing in vulnerability", "Balancing independence with togetherness"], cosmic_advice: "Let conversations flow like water — the deeper you go, the more treasure you'll find.", best_date_night: "Stargazing picnic with homemade food and a shared playlist." }); }
     setStarsLoad(false);
   };
@@ -646,6 +673,7 @@ export default function AutoMate() {
     }, rep ? 600 : 1500 + Math.random() * 2000);
   };
   const rxMsg = (mid, msgId, emoji) => { setConvos(p => ({ ...p, [mid]: p[mid].map(m => m.id === msgId ? { ...m, rx: [...(m.rx || []), emoji] } : m) })); setShowRx(null); };
+  const deleteMsg = (mid, msgId) => { setConvos(p => ({ ...p, [mid]: p[mid].filter(m => m.id !== msgId) })); setShowRx(null); setToast("Message deleted"); };
   const fetchCoach = async () => { if (!match) return; setCoachLoad(true); setCoachSugs(await aiSuggest(match) || ICEBREAKERS.slice(0, 3)); setCoachLoad(false); };
   const fetchDates = async () => { setGenieLoad(true); setGenieDates(await aiDates() || DATE_IDEAS.slice(0, 3)); setGenieLoad(false); };
   const genBio = async () => { setBioLoad(true); setBioOut(await aiBio() || "I believe the best connections start with genuine curiosity and shared laughter. Always up for an adventure or a deep conversation over good coffee. ✨"); setBioLoad(false); };
@@ -698,6 +726,7 @@ export default function AutoMate() {
         @keyframes scan{0%{top:0}100%{top:100%}}
         @keyframes aiGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(168,85,247,0.5))}50%{filter:drop-shadow(0 0 25px rgba(99,102,241,0.7))}}
         @keyframes aiMsgGlow{0%,100%{box-shadow:0 0 12px rgba(99,102,241,0.3),0 0 4px rgba(168,85,247,0.2)}50%{box-shadow:0 0 24px rgba(99,102,241,0.5),0 0 8px rgba(6,182,212,0.3)}}
+        @keyframes shootStar{0%{opacity:0;transform:translateY(0) rotate(35deg)}10%{opacity:1}90%{opacity:0.8}100%{opacity:0;transform:translateY(300px) rotate(35deg)}}
         @keyframes toast{from{opacity:0;transform:translateX(-50%) translateY(-24px) scale(0.9)}to{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}}
         @keyframes heartbeat{0%,100%{transform:scale(1)}15%{transform:scale(1.2)}30%{transform:scale(1)}45%{transform:scale(1.14)}}
         @keyframes matchReveal{0%{opacity:0;transform:scale(0.3) rotate(-10deg)}50%{transform:scale(1.1) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
@@ -1025,13 +1054,24 @@ export default function AutoMate() {
             <button className="bp" onClick={() => { setView("discover"); setMatch(null); }} style={{ width: 38, height: 38, borderRadius: 14, background: C.card2, border: "none", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, color: C.text, ...bpS }}>←</button>
             <div style={{ position: "relative", cursor: "pointer" }} onClick={() => setModal(match)}><img src={match.photo_url || match.photo || "https://i.pravatar.cc/300"} alt="" style={{ width: 44, height: 44, borderRadius: 16, objectFit: "cover" }} />{match.status === "online" && <div style={{ position: "absolute", bottom: 0, right: 0, width: 11, height: 11, borderRadius: "50%", background: C.green, boxShadow: `0 0 0 2px ${C.bg}` }} />}</div>
             <div style={{ flex: 1 }}><div style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ fontWeight: 700, fontSize: 16 }}>{match.name}</span>{match.verified && <span style={{ fontSize: 12, color: C.green }}>✓</span>}</div><span style={{ fontSize: 12, color: C.dim }}>{match.compat}% compatible</span></div>
-            <button className="bp" onClick={() => setShowCoach(!showCoach)} style={{ width: 36, height: 36, borderRadius: 13, background: showCoach ? "rgba(255,60,172,0.12)" : C.card2, border: "none", fontSize: 15, ...bpS }} aria-label="AI Coach">🤖</button>
-            <button className="bp" onClick={() => { aiDeepDive(match); setMatchAnim(match); }} style={{ width: 36, height: 36, borderRadius: 13, background: C.card2, border: "none", fontSize: 15, animation: "aiGlow 3s ease infinite", ...bpS }} aria-label="Relationship Forecast">🔮</button>
-            <button className="bp" onClick={() => { setShowVibe(true); setVibeStep(0); setVibeAnswers([]); setVibeResult(null); }} style={{ width: 36, height: 36, borderRadius: 13, background: C.card2, border: "none", fontSize: 15, ...bpS }} aria-label="Vibe Check">🎯</button>
-            <button className="bp" onClick={() => setShowGames(true)} style={{ width: 36, height: 36, borderRadius: 13, background: C.card2, border: "none", fontSize: 15, ...bpS }} aria-label="Games">🎮</button>
-            <button className="bp" onClick={() => setShowDate(!showDate)} style={{ width: 36, height: 36, borderRadius: 13, background: C.card2, border: "none", fontSize: 15, ...bpS }} aria-label="Date Ideas">📅</button>
-            <button className="bp" onClick={() => setReport(match)} style={{ width: 36, height: 36, borderRadius: 13, background: C.card2, border: "none", fontSize: 15, ...bpS }} aria-label="Report">⚠️</button>
           </Card>
+          {/* Chat Tools Bar */}
+          <div style={{ display: "flex", gap: 6, padding: "8px 12px 4px", overflowX: "auto", scrollbarWidth: "none" }}>
+            {[
+              { icon: "🤖", label: "Coach", fn: () => setShowCoach(!showCoach), active: showCoach },
+              { icon: "🔮", label: "Forecast", fn: () => { aiDeepDive(match); setMatchAnim(match); } },
+              { icon: "🎯", label: "Vibe", fn: () => { setShowVibe(true); setVibeStep(0); setVibeAnswers([]); setVibeResult(null); } },
+              { icon: "🎮", label: "Games", fn: () => setShowGames(true) },
+              { icon: "📅", label: "Dates", fn: () => setShowDate(!showDate) },
+              { icon: "🌌", label: "Stars", fn: () => { setShowStars(true); aiStars(match); } },
+              { icon: "⚠️", label: "Report", fn: () => setReport(match) },
+            ].map(t => (
+              <button key={t.label} className="bp" onClick={t.fn} aria-label={t.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 12px", borderRadius: 14, background: t.active ? "rgba(255,60,172,0.12)" : C.card2, border: `1px solid ${t.active ? "rgba(255,60,172,0.3)" : C.brd}`, minWidth: 56, flexShrink: 0, ...bpS }}>
+                <span style={{ fontSize: 20 }}>{t.icon}</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: t.active ? C.pop : C.dim }}>{t.label}</span>
+              </button>
+            ))}
+          </div>
 
           {showCoach && <Card s={{ margin: "8px 12px 0", padding: 14, borderRadius: 20, animation: "slideUp 0.3s ease" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}><span style={{ fontSize: 14, fontWeight: 700 }}>🤖 AI Coach</span><Btn onClick={fetchCoach} s={{ padding: "6px 16px", fontSize: 12, borderRadius: 14 }}>{coachLoad ? "Thinking..." : "✨ Suggest"}</Btn></div>
@@ -1058,7 +1098,7 @@ export default function AutoMate() {
                     {m.from === "me" && <span style={{ fontSize: 11, color: "rgba(255,255,255,0.4)" }}>✓✓</span>}
                   </div>
                   {(m.rx || []).length > 0 && <div style={{ position: "absolute", bottom: -10, [m.from === "me" ? "left" : "right"]: 8, background: C.card, borderRadius: 12, padding: "2px 6px", fontSize: 14, border: `1px solid ${C.brd}` }}>{m.rx.join("")}</div>}
-                  {showRx === m.id && <div style={{ position: "absolute", bottom: -40, [m.from === "me" ? "right" : "left"]: 0, display: "flex", gap: 4, background: C.card, borderRadius: 16, padding: "6px 8px", border: `1px solid ${C.brd}`, animation: "pop 0.25s ease", zIndex: 10 }}>{EMOJIS.map(em => <button key={em} onClick={() => rxMsg(match.id, m.id, em)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: 2 }}>{em}</button>)}</div>}
+                  {showRx === m.id && <div style={{ position: "absolute", bottom: -40, [m.from === "me" ? "right" : "left"]: 0, display: "flex", gap: 4, background: C.card, borderRadius: 16, padding: "6px 8px", border: `1px solid ${C.brd}`, animation: "pop 0.25s ease", zIndex: 10 }}>{EMOJIS.map(em => <button key={em} onClick={() => rxMsg(match.id, m.id, em)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", padding: 2 }}>{em}</button>)}{m.from === "me" && <button onClick={() => deleteMsg(match.id, m.id)} style={{ background: "none", border: "none", fontSize: 14, cursor: "pointer", padding: "2px 6px", color: "#ff5555", fontWeight: 700 }}>🗑️</button>}</div>}
                 </div>
               </div>
             ))}
@@ -1080,27 +1120,110 @@ export default function AutoMate() {
         <div className="w" style={{ overflowY: "auto" }}>
           <div style={{ padding: "20px 24px 16px", background: "linear-gradient(180deg, rgba(120,75,160,0.12) 0%, transparent 100%)" }}><h2 style={{ fontSize: 24, fontWeight: 800, fontFamily: "'Sora'" }}>My Profile</h2></div>
           <div style={{ padding: "0 24px 100px" }}>
-            <div style={{ textAlign: "center", marginBottom: 24 }}>
-              <div style={{ width: 100, height: 100, borderRadius: 30, margin: "0 auto 16px", background: C.g1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, overflow: "hidden", border: `3px solid ${C.brd}`, cursor: "pointer", position: "relative" }} onClick={() => document.getElementById("photo-upload")?.click()}>
-                {me.photo_url ? <img src={me.photo_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : me.name ? me.name[0] : "?"}
-                <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 4, background: "rgba(0,0,0,0.6)", fontSize: 11, color: "white" }}>📸 Edit</div>
+            {/* ── Photo Gallery ── */}
+            <Card s={{ padding: 16, marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><p style={{ fontSize: 15, fontWeight: 700 }}>📸 Photos <span style={{ fontSize: 12, color: C.dim, fontWeight: 500 }}>({(me.photos || []).length}/20)</span></p></div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 10 }}>
+                {(me.photos || []).map((url, i) => (
+                  <div key={i} style={{ position: "relative", aspectRatio: "1", borderRadius: 16, overflow: "hidden", border: url === me.photo_url ? `2px solid ${C.pop}` : `1px solid ${C.brd}`, cursor: "pointer" }} onClick={() => setPhotoView(url)}>
+                    <img src={url} alt={`Photo ${i+1}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    {url === me.photo_url && <div style={{ position: "absolute", top: 4, left: 4, padding: "2px 8px", borderRadius: 8, background: C.g1, fontSize: 10, fontWeight: 700, color: "white" }}>Main</div>}
+                    <button onClick={e => { e.stopPropagation(); removeGalleryPhoto(url); }} style={{ position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: 8, background: "rgba(255,80,80,0.8)", border: "none", color: "white", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                  </div>
+                ))}
+                {(me.photos || []).length < 20 && (
+                  <div onClick={() => document.getElementById("gallery-upload")?.click()} style={{ aspectRatio: "1", borderRadius: 16, border: `2px dashed ${C.brd}`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", cursor: "pointer", background: C.card2 }}>
+                    <span style={{ fontSize: 28, marginBottom: 4 }}>+</span>
+                    <span style={{ fontSize: 11, color: C.dim }}>Add Photo</span>
+                  </div>
+                )}
               </div>
-              <input id="photo-upload" type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && uploadPhoto(e.target.files[0])} />
-              <h3 style={{ fontSize: 20, fontWeight: 800 }}>{me.name || "Your Name"}{me.age ? `, ${me.age}` : ""}</h3>
-              <p style={{ fontSize: 14, color: C.dim }}>{me.city || "Your City"} {me.job ? `· ${me.job}` : ""}</p>
-            </div>
-            <Inp label="Name" value={me.name} onChange={e => setMe(p => ({ ...p, name: e.target.value }))} onBlur={() => saveProfile({ name: me.name })} />
+              <input id="gallery-upload" type="file" accept="image/*" style={{ display: "none" }} onChange={e => e.target.files?.[0] && uploadGalleryPhoto(e.target.files[0])} />
+              {(me.photos || []).length === 0 && <p style={{ fontSize: 13, color: C.dim, textAlign: "center" }}>Add up to 20 photos — first one becomes your main pic</p>}
+            </Card>
+
+            {/* ── Basic Info ── */}
+            <Inp label="Name" value={me.name} onChange={e => setMe(p => ({ ...p, name: e.target.value }))} />
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Inp label="Age" type="number" value={me.age} onChange={e => setMe(p => ({ ...p, age: e.target.value }))} onBlur={() => saveProfile({ age: me.age })} />
-              <Inp label="City" value={me.city} onChange={e => setMe(p => ({ ...p, city: e.target.value }))} onBlur={() => saveProfile({ city: me.city })} />
+              <Inp label="Age" type="number" value={me.age} onChange={e => setMe(p => ({ ...p, age: e.target.value }))} />
+              <Inp label="City" value={me.city} onChange={e => setMe(p => ({ ...p, city: e.target.value }))} />
             </div>
-            <Inp label="Job" value={me.job} onChange={e => setMe(p => ({ ...p, job: e.target.value }))} onBlur={() => saveProfile({ job: me.job })} />
-            <div style={{ marginBottom: 18 }}><label style={{ fontSize: 13, fontWeight: 700, color: C.soft, marginBottom: 8, display: "block" }}>Bio</label><textarea className="ig" value={me.bio} onChange={e => setMe(p => ({ ...p, bio: e.target.value }))} onBlur={() => saveProfile({ bio: me.bio })} rows={3} style={{ width: "100%", padding: "15px 20px", borderRadius: 18, border: `1px solid ${C.brd}`, background: C.card, color: C.text, fontSize: 15, fontFamily: "'Outfit'", outline: "none", resize: "vertical" }} /></div>
-            <Btn onClick={() => setBioWriter(true)} g={C.gAI} s={{ width: "100%", fontSize: 14, marginBottom: 20 }}>✍️ AI Bio Writer</Btn>
-            <Card s={{ padding: 16, marginBottom: 16 }}>
+            <Inp label="Job" value={me.job} onChange={e => setMe(p => ({ ...p, job: e.target.value }))} />
+            <div style={{ marginBottom: 18 }}><label style={{ fontSize: 13, fontWeight: 700, color: C.soft, marginBottom: 8, display: "block" }}>Bio</label><textarea className="ig" value={me.bio} onChange={e => setMe(p => ({ ...p, bio: e.target.value }))} rows={3} style={{ width: "100%", padding: "15px 20px", borderRadius: 18, border: `1px solid ${C.brd}`, background: C.card, color: C.text, fontSize: 15, fontFamily: "'Outfit'", outline: "none", resize: "vertical" }} /></div>
+            <Btn onClick={() => setBioWriter(true)} g={C.gAI} s={{ width: "100%", fontSize: 14, marginBottom: 14 }}>✍️ AI Bio Writer</Btn>
+
+            {/* ── Hinge-Style Prompts ── */}
+            <Card s={{ padding: 16, marginBottom: 18 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}><p style={{ fontSize: 15, fontWeight: 700 }}>💬 Profile Prompts</p><button className="bp" onClick={() => setEditPrompts(!editPrompts)} style={{ padding: "6px 14px", borderRadius: 12, background: editPrompts ? C.g1 : C.card2, border: editPrompts ? "none" : `1px solid ${C.brd}`, color: editPrompts ? "white" : C.soft, fontSize: 12, fontWeight: 600, ...bpS }}>{editPrompts ? "Done" : "Edit"}</button></div>
+              {(me.prompts || [{q:"",a:""},{q:"",a:""},{q:"",a:""}]).map((prompt, idx) => (
+                <div key={idx} style={{ marginBottom: 14, padding: 14, borderRadius: 16, background: prompt.q && prompt.a ? "linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.06))" : C.card2, border: `1px solid ${prompt.q && prompt.a ? "rgba(168,85,247,0.15)" : C.brd}` }}>
+                  {editPrompts ? <>
+                    <select value={prompt.q} onChange={e => { const p = [...(me.prompts || [{q:"",a:""},{q:"",a:""},{q:"",a:""}])]; p[idx] = { ...p[idx], q: e.target.value }; setMe(prev => ({ ...prev, prompts: p })); }} style={{ width: "100%", padding: "10px 14px", borderRadius: 14, border: `1px solid ${C.brd}`, background: C.card, color: C.text, fontSize: 14, fontFamily: "'Outfit'", outline: "none", marginBottom: 8 }}>
+                      <option value="">Choose a prompt...</option>
+                      {PROFILE_PROMPTS.map(pp => <option key={pp} value={pp}>{pp}</option>)}
+                    </select>
+                    <textarea value={prompt.a} onChange={e => { const p = [...(me.prompts || [{q:"",a:""},{q:"",a:""},{q:"",a:""}])]; p[idx] = { ...p[idx], a: e.target.value }; setMe(prev => ({ ...prev, prompts: p })); }} placeholder="Your answer..." rows={2} style={{ width: "100%", padding: "10px 14px", borderRadius: 14, border: `1px solid ${C.brd}`, background: C.card, color: C.text, fontSize: 14, fontFamily: "'Outfit'", outline: "none", resize: "none" }} />
+                  </> : prompt.q && prompt.a ? <>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "rgba(168,85,247,0.9)", marginBottom: 6 }}>{prompt.q}</p>
+                    <p style={{ fontSize: 15, color: C.soft, lineHeight: 1.6 }}>{prompt.a}</p>
+                  </> : <p style={{ fontSize: 13, color: C.dim, textAlign: "center" }}>Tap Edit to add prompt #{idx + 1}</p>}
+                </div>
+              ))}
+            </Card>
+
+            {/* ── Save Button ── */}
+            <Btn onClick={() => { saveProfile({ name: me.name, age: me.age, city: me.city, job: me.job, bio: me.bio, prompts: me.prompts }); setEditPrompts(false); setToast("Profile saved! ✅"); }} g={C.green} s={{ width: "100%", fontSize: 15, marginBottom: 22, background: C.green, boxShadow: "0 6px 20px rgba(0,232,123,0.3)" }}>💾 Save Profile</Btn>
+
+            {/* ── Interests ── */}
+            <Card s={{ padding: 16, marginBottom: 14 }}>
               <p style={{ fontSize: 13, fontWeight: 700, color: C.soft, marginBottom: 10 }}>Interests</p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{(me.interests || []).map(i => <span key={i} style={{ padding: "6px 14px", borderRadius: 14, fontSize: 13, background: C.g2, color: "white", fontWeight: 600 }}>{i}</span>)}</div>
             </Card>
+
+            {/* ── Quiz Answers with Privacy Toggles ── */}
+            <Card s={{ padding: 16, marginBottom: 14 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}><p style={{ fontSize: 15, fontWeight: 700 }}>📋 My Quiz Answers</p><button className="bp" onClick={() => { setQStep(0); setPage("quiz"); }} style={{ padding: "6px 14px", borderRadius: 12, background: C.card2, border: `1px solid ${C.brd}`, color: C.soft, fontSize: 12, fontWeight: 600, ...bpS }}>Retake</button></div>
+              <p style={{ fontSize: 12, color: C.dim, marginBottom: 14 }}>🔒 Tap the lock to hide fields from other users</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                {[
+                  me.identity && { l: "Identity", v: me.identity, i: "🌈", k: "identity" },
+                  me.seeking?.length && { l: "Seeking", v: me.seeking.join(", "), i: "💕", k: "seeking" },
+                  me.goals && { l: "Goals", v: me.goals, i: "💝", k: "goals" },
+                  me.education && { l: "Education", v: me.education, i: "🎓", k: "education" },
+                  me.profession && { l: "Career", v: me.profession, i: "💼", k: "profession" },
+                  me.comm_style && { l: "Love Language", v: me.comm_style, i: "💬", k: "comm_style" },
+                  me.lifestyle && { l: "Lifestyle", v: me.lifestyle, i: "🏃", k: "lifestyle" },
+                  me.values?.length && { l: "Values", v: me.values.join(", "), i: "⭐", k: "values" },
+                  me.smoking && { l: "Smoking", v: me.smoking, i: "🚬", k: "smoking" },
+                  me.drinking && { l: "Drinking", v: me.drinking, i: "🍷", k: "drinking" },
+                  me.cannabis && { l: "420", v: me.cannabis, i: "🌿", k: "cannabis" },
+                  me.has_kids && { l: "Kids", v: me.has_kids, i: "👶", k: "has_kids" },
+                  me.wants_kids && { l: "Wants Kids", v: me.wants_kids, i: "🍼", k: "wants_kids" },
+                  me.exercise && { l: "Exercise", v: me.exercise, i: "💪", k: "exercise" },
+                  me.diet && me.diet !== "No preference" && { l: "Diet", v: me.diet, i: "🥗", k: "diet" },
+                  me.pets && { l: "Pets", v: me.pets, i: "🐾", k: "pets" },
+                  me.religion && me.religion !== "Prefer not to say" && { l: "Faith", v: me.religion, i: "🙏", k: "religion" },
+                  me.politics && me.politics !== "Prefer not to say" && { l: "Politics", v: me.politics, i: "🗳️", k: "politics" },
+                  me.star_sign && me.star_sign !== "Don't care" && me.star_sign !== "Don't know" && { l: "Sign", v: me.star_sign, i: "♈", k: "star_sign" },
+                  { l: "Intimacy", v: `${me.intimacy}/10`, i: "🔥", k: "intimacy" },
+                ].filter(Boolean).map(d => {
+                  const isPrivate = (me.private_fields || []).includes(d.k);
+                  return <div key={d.l} style={{ padding: "10px 12px", borderRadius: 14, background: isPrivate ? "rgba(255,80,80,0.04)" : C.card2, border: `1px solid ${isPrivate ? "rgba(255,80,80,0.15)" : C.brd}`, position: "relative", opacity: isPrivate ? 0.6 : 1 }}>
+                    <button onClick={() => { const pf = me.private_fields || []; const updated = pf.includes(d.k) ? pf.filter(f => f !== d.k) : [...pf, d.k]; setMe(p => ({ ...p, private_fields: updated })); saveProfile({ private_fields: updated }); }} style={{ position: "absolute", top: 6, right: 6, background: "none", border: "none", fontSize: 12, cursor: "pointer", padding: 2 }}>{isPrivate ? "🔒" : "🔓"}</button>
+                    <p style={{ fontSize: 11, color: C.dim, marginBottom: 2 }}>{d.i} {d.l}</p>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: C.soft }}>{d.v}</p>
+                  </div>;
+                })}
+              </div>
+            </Card>
+
+            {/* ── Profile Completion ── */}
+            {(() => { const fields = [me.name, me.age, me.city, me.job, me.bio, me.photo_url || (me.photos||[]).length, me.interests?.length, me.values?.length, me.goals, me.lifestyle, me.comm_style, me.identity, me.education, (me.prompts||[]).filter(p=>p.q&&p.a).length]; const filled = fields.filter(Boolean).length; const pct = Math.round((filled / fields.length) * 100); return (
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}><span style={{ fontSize: 12, color: C.dim }}>Profile Completion</span><span style={{ fontSize: 12, fontWeight: 700, color: pct === 100 ? C.green : C.pop }}>{pct}%</span></div>
+                <div style={{ height: 6, borderRadius: 6, background: C.card2 }}><div style={{ height: "100%", borderRadius: 6, background: pct === 100 ? C.green : C.g1, width: `${pct}%`, transition: "width 0.5s" }} /></div>
+              </div>
+            ); })()}
           </div>
           <Nav />
         </div>
@@ -1150,8 +1273,52 @@ export default function AutoMate() {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}><div><h2 style={{ fontSize: 24, fontWeight: 800 }}>{modal.name}, {modal.age}</h2><p style={{ fontSize: 14, color: C.dim }}>{modal.city} · {modal.job}</p></div><div style={{ width: 52, height: 52, borderRadius: 16, background: C.g1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "white", boxShadow: "0 6px 20px rgba(255,60,172,0.3)" }}>{modal.compat}%</div></div>
               <p style={{ fontSize: 14, color: C.soft, lineHeight: 1.6, marginBottom: 16, fontStyle: "italic" }}>💡 {modal.why}</p>
               <p style={{ fontSize: 16, lineHeight: 1.7, marginBottom: 18, color: C.soft }}>{modal.bio}</p>
+              {/* Hinge-Style Prompts on modal */}
+              {(modal.prompts || []).filter(p => p.q && p.a).length > 0 && <div style={{ marginBottom: 18 }}>
+                {modal.prompts.filter(p => p.q && p.a).map((p, i) => (
+                  <div key={i} style={{ padding: "14px 16px", marginBottom: 10, borderRadius: 16, background: "linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.06))", border: "1px solid rgba(168,85,247,0.15)" }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "rgba(168,85,247,0.9)", marginBottom: 6 }}>{p.q}</p>
+                    <p style={{ fontSize: 15, color: C.soft, lineHeight: 1.6 }}>{p.a}</p>
+                  </div>
+                ))}
+              </div>}
+              {/* Photo Gallery on modal */}
+              {(modal.photos || []).length > 1 && <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 18 }}>
+                {modal.photos.slice(1, 7).map((url, i) => (
+                  <div key={i} style={{ aspectRatio: "1", borderRadius: 14, overflow: "hidden", cursor: "pointer" }} onClick={() => setPhotoView(url)}>
+                    <img src={url} alt={`${modal.name} photo ${i+2}`} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                ))}
+                {(modal.photos || []).length > 7 && <div style={{ aspectRatio: "1", borderRadius: 14, background: C.card2, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${C.brd}` }}><span style={{ fontSize: 14, fontWeight: 700, color: C.dim }}>+{modal.photos.length - 7}</span></div>}
+              </div>}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>{[{ l: "Goals", v: modal.goals }, { l: "Love Language", v: modal.comm_style }, { l: "Lifestyle", v: modal.lifestyle }, { l: "Intimacy", v: `${modal.intimacy}/10` }, ...(modal.identity ? [{ l: "Identity", v: modal.identity }] : []), ...(modal.relationship_mode ? [{ l: "Looking For", v: modal.relationship_mode }] : []), ...(modal.education ? [{ l: "Education", v: modal.education }] : []), ...(modal.smoking ? [{ l: "Smoking", v: modal.smoking }] : []), ...(modal.drinking ? [{ l: "Drinking", v: modal.drinking }] : []), ...(modal.cannabis ? [{ l: "420", v: modal.cannabis }] : []), ...(modal.has_kids ? [{ l: "Kids", v: modal.has_kids }] : []), ...(modal.wants_kids ? [{ l: "Wants Kids", v: modal.wants_kids }] : []), ...(modal.exercise ? [{ l: "Exercise", v: modal.exercise }] : []), ...(modal.pets ? [{ l: "Pets", v: modal.pets }] : []), ...(modal.religion && modal.religion !== "Prefer not to say" ? [{ l: "Faith", v: modal.religion }] : []), ...(modal.star_sign && modal.star_sign !== "Don't care" && modal.star_sign !== "Don't know" ? [{ l: "Sign", v: modal.star_sign }] : []), ...(modal.diet && modal.diet !== "No preference" ? [{ l: "Diet", v: modal.diet }] : [])].map(d => <div key={d.l} style={{ padding: "12px 14px", borderRadius: 16, background: C.card2, border: `1px solid ${C.brd}` }}><p style={{ fontSize: 12, color: C.dim, fontWeight: 700, marginBottom: 3 }}>{d.l}</p><p style={{ fontSize: 14, fontWeight: 600 }}>{d.v}</p></div>)}</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>{(modal.interests || []).map(i => <span key={i} style={{ padding: "7px 16px", borderRadius: 14, fontSize: 13, fontWeight: 600, background: C.card2, border: `1px solid ${C.brd}`, color: C.soft }}>{i}</span>)}</div>
+              {/* AI Insights — Pro Feature Hooks */}
+              <Card s={{ padding: 16, marginBottom: 16, background: "linear-gradient(135deg, rgba(168,85,247,0.06), rgba(99,102,241,0.06))", border: "1px solid rgba(168,85,247,0.15)" }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: "rgba(168,85,247,0.9)", marginBottom: 12 }}>✨ AI Insights</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                  <button className="bp" onClick={() => { setModal(null); aiDeepDive(modal); setMatchAnim(modal); }} style={{ padding: "14px 10px", borderRadius: 16, background: C.card2, border: `1px solid ${C.brd}`, textAlign: "center", ...bpS }}>
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>🔮</div>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Forecast</p>
+                    <p style={{ fontSize: 10, color: C.dim }}>Compatibility analysis</p>
+                  </button>
+                  <button className="bp" onClick={() => { setModal(null); setStarsTarget(modal); setShowStars(true); aiStars(modal); }} style={{ padding: "14px 10px", borderRadius: 16, background: C.card2, border: `1px solid ${C.brd}`, textAlign: "center", ...bpS }}>
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>🌌</div>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Cosmic</p>
+                    <p style={{ fontSize: 10, color: C.dim }}>Star sign reading</p>
+                  </button>
+                  <button className="bp" onClick={() => { setModal(null); openChat(modal); setTimeout(() => setShowCoach(true), 300); }} style={{ padding: "14px 10px", borderRadius: 16, background: C.card2, border: `1px solid ${C.brd}`, textAlign: "center", ...bpS }}>
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>🤖</div>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: C.text }}>AI Coach</p>
+                    <p style={{ fontSize: 10, color: C.dim }}>Personalized openers</p>
+                  </button>
+                  <button className="bp" onClick={() => { setModal(null); openChat(modal); setTimeout(() => { setShowVibe(true); setVibeStep(0); setVibeAnswers([]); setVibeResult(null); }, 300); }} style={{ padding: "14px 10px", borderRadius: 16, background: C.card2, border: `1px solid ${C.brd}`, textAlign: "center", ...bpS }}>
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>🎯</div>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: C.text }}>Vibe Check</p>
+                    <p style={{ fontSize: 10, color: C.dim }}>Pre-date readiness</p>
+                  </button>
+                </div>
+              </Card>
               <div style={{ display: "flex", gap: 12 }}><Btn onClick={() => { setModal(null); openChat(modal); }} s={{ flex: 1, fontSize: 15 }}>💬 Message</Btn><button className="bp" onClick={() => { setReport(modal); setModal(null); }} style={{ width: 54, height: 54, borderRadius: 18, border: `1px solid ${C.brd}`, background: C.card2, fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", ...bpS }}>⚠️</button></div>
             </Card>
           </div>
@@ -1186,6 +1353,16 @@ export default function AutoMate() {
       )}
 
       {/* ══════════════════ BIO WRITER ══════════════════ */}
+      {photoView && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.95)", display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s ease" }} onClick={() => setPhotoView(null)}>
+          <button onClick={() => setPhotoView(null)} style={{ position: "absolute", top: 20, right: 20, width: 44, height: 44, borderRadius: 14, background: "rgba(255,255,255,0.1)", border: "none", color: "white", fontSize: 20, cursor: "pointer", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          <img src={photoView} alt="Full view" onClick={e => e.stopPropagation()} style={{ maxWidth: "95%", maxHeight: "90vh", objectFit: "contain", borderRadius: 16, animation: "pop 0.3s ease" }} />
+          {me.photos?.includes(photoView) && <div onClick={e => e.stopPropagation()} style={{ position: "absolute", bottom: 30, display: "flex", gap: 12 }}>
+            <button className="bp" onClick={() => { setMainPhoto(photoView); setPhotoView(null); }} style={{ padding: "12px 24px", borderRadius: 16, background: C.g1, border: "none", color: "white", fontSize: 14, fontWeight: 700, ...bpS }}>⭐ Set as Main</button>
+            <button className="bp" onClick={() => { removeGalleryPhoto(photoView); setPhotoView(null); }} style={{ padding: "12px 24px", borderRadius: 16, background: "rgba(255,80,80,0.2)", border: "1px solid rgba(255,80,80,0.3)", color: "#ff5555", fontSize: 14, fontWeight: 700, ...bpS }}>🗑️ Remove</button>
+          </div>}
+        </div>
+      )}
       {bioWriter && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(5,5,13,0.7)", backdropFilter: "blur(12px)", display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s ease" }} onClick={() => setBioWriter(false)}>
           <Card onClick={e => e.stopPropagation()} s={{ width: "94%", maxWidth: 560, padding: 26, animation: "pop 0.35s cubic-bezier(0.34,1.56,0.64,1)", position: "relative" }}>
@@ -1201,13 +1378,31 @@ export default function AutoMate() {
 
       {/* ══════════════════ IN THE STARS ══════════════════ */}
       {showStars && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(5,5,13,0.85)", backdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s ease" }} onClick={() => { setShowStars(false); setStarsResult(null); }}>
-          <Card onClick={e => e.stopPropagation()} s={{ width: "94%", maxWidth: 560, maxHeight: "85vh", overflowY: "auto", padding: 26, animation: "pop 0.35s cubic-bezier(0.34,1.56,0.64,1)", position: "relative", background: "linear-gradient(160deg, rgba(18,15,38,0.95) 0%, rgba(30,20,60,0.95) 50%, rgba(15,10,35,0.95) 100%)" }}>
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(5,5,13,0.92)", backdropFilter: "blur(16px)", display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s ease" }} onClick={() => { setShowStars(false); setStarsResult(null); }}>
+          {/* Shooting Stars Background */}
+          {Array.from({ length: 8 }).map((_, i) => <div key={i} style={{ position: "absolute", width: 2, height: 80 + Math.random() * 60, background: `linear-gradient(transparent, rgba(168,85,247,${0.4 + Math.random() * 0.4}), transparent)`, top: `${Math.random() * 40}%`, left: `${10 + Math.random() * 80}%`, transform: `rotate(${35 + Math.random() * 20}deg)`, animation: `shootStar ${1.5 + Math.random() * 2}s ease ${Math.random() * 3}s infinite`, opacity: 0, borderRadius: 4 }} />)}
+          <Card onClick={e => e.stopPropagation()} s={{ width: "94%", maxWidth: 560, maxHeight: "85vh", overflowY: "auto", padding: 26, animation: "pop 0.35s cubic-bezier(0.34,1.56,0.64,1)", position: "relative", background: "linear-gradient(160deg, rgba(10,8,30,0.97) 0%, rgba(25,15,50,0.97) 50%, rgba(8,5,25,0.97) 100%)" }}>
             <button className="bp" onClick={() => { setShowStars(false); setStarsResult(null); }} style={{ position: "absolute", top: 14, left: 14, width: 36, height: 36, borderRadius: 12, background: C.card2, border: `1px solid ${C.brd}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, color: C.text, zIndex: 2, ...bpS }}>←</button>
             <div style={{ textAlign: "center", marginBottom: 22 }}>
-              <div style={{ fontSize: 52, marginBottom: 10, animation: "float 3s ease infinite", filter: "drop-shadow(0 0 20px rgba(168,85,247,0.5))" }}>🌌</div>
-              <h2 style={{ fontSize: 24, fontWeight: 900, fontFamily: "'Sora'" }}><span className="gt">In The Stars</span></h2>
-              <p style={{ fontSize: 14, color: C.dim, marginTop: 6 }}>Soul-level cosmic compatibility</p>
+              {/* SVG Constellation Header */}
+              <svg width="100" height="100" viewBox="0 0 100 100" style={{ margin: "0 auto 12px", display: "block", filter: "drop-shadow(0 0 20px rgba(168,85,247,0.6))", animation: "float 3s ease infinite" }}>
+                <circle cx="30" cy="20" r="2.5" fill="#a855f7" opacity="0.9"><animate attributeName="opacity" values="0.5;1;0.5" dur="2s" repeatCount="indefinite"/></circle>
+                <circle cx="70" cy="15" r="2" fill="#6366f1" opacity="0.8"><animate attributeName="opacity" values="0.4;1;0.4" dur="2.5s" repeatCount="indefinite"/></circle>
+                <circle cx="50" cy="45" r="3" fill="#c084fc" opacity="1"><animate attributeName="opacity" values="0.6;1;0.6" dur="1.8s" repeatCount="indefinite"/></circle>
+                <circle cx="20" cy="55" r="2" fill="#818cf8" opacity="0.7"><animate attributeName="opacity" values="0.5;1;0.5" dur="3s" repeatCount="indefinite"/></circle>
+                <circle cx="80" cy="50" r="2.5" fill="#a855f7" opacity="0.85"><animate attributeName="opacity" values="0.4;1;0.4" dur="2.2s" repeatCount="indefinite"/></circle>
+                <circle cx="45" cy="75" r="2" fill="#6366f1" opacity="0.9"><animate attributeName="opacity" values="0.6;1;0.6" dur="2.8s" repeatCount="indefinite"/></circle>
+                <circle cx="65" cy="80" r="2.5" fill="#c084fc" opacity="0.75"><animate attributeName="opacity" values="0.5;1;0.5" dur="2.1s" repeatCount="indefinite"/></circle>
+                <line x1="30" y1="20" x2="50" y2="45" stroke="rgba(168,85,247,0.3)" strokeWidth="1"/>
+                <line x1="70" y1="15" x2="50" y2="45" stroke="rgba(99,102,241,0.3)" strokeWidth="1"/>
+                <line x1="50" y1="45" x2="20" y2="55" stroke="rgba(168,85,247,0.25)" strokeWidth="1"/>
+                <line x1="50" y1="45" x2="80" y2="50" stroke="rgba(99,102,241,0.25)" strokeWidth="1"/>
+                <line x1="20" y1="55" x2="45" y2="75" stroke="rgba(168,85,247,0.2)" strokeWidth="1"/>
+                <line x1="80" y1="50" x2="65" y2="80" stroke="rgba(99,102,241,0.2)" strokeWidth="1"/>
+                <line x1="45" y1="75" x2="65" y2="80" stroke="rgba(192,132,252,0.3)" strokeWidth="1"/>
+              </svg>
+              <h2 style={{ fontSize: 26, fontWeight: 900, fontFamily: "'Sora'" }}><span style={{ background: "linear-gradient(135deg, #c084fc, #818cf8, #06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>In The Stars</span></h2>
+              <p style={{ fontSize: 14, color: "rgba(192,132,252,0.6)", marginTop: 6 }}>Soul-level cosmic compatibility</p>
             </div>
             {!starsResult && !starsLoad && <div>
               <p style={{ fontSize: 14, color: C.soft, textAlign: "center", marginBottom: 18, lineHeight: 1.7 }}>Select a match to reveal your cosmic connection — powered by AI astrology analysis of your full profiles.</p>
